@@ -1,162 +1,210 @@
-//Libraries
-#include <Arduino.h>
-//#include <Servo.h>
-#include <NewPing.h>
+#include "config.h"
 
+//Array to store the messages
+static const char *messages[MESSAGES_LEN];
+//Current servo angle
+static int servoAngle;
+//Distance returned by sonar range finder
+static int sonarDistance;
+//Index of the current message
+static int currentMessage;
+//Current state of the servos
+static servoState currentServoState;
+//PWM servo variable
+static Adafruit_PWMServoDriver pwm;
 
-//Pins for sonar range finder
-#define TRIGGER_PIN A1 //(2nd to rightmost bit of DDRC)
-#define ECHO_PIN A0 //(Rightmost bit of DDRC)
-
-//Pins for servos
-//#define SERVO_PIN 9
-
-//Parameters for servos
-#define SERVO_START_ANGLE 90
-#define SERVO_UP_LIMIT 180
-#define SERVO_DOWN_LIMIT 0
-//static Servo myServo;
-
-//Sensor state definitions
-#define DETECTION_YES 1
-#define DETECTION_NO 0
-
-//Setting up sonar range finder
-#define MAX_DISTANCE 200
-#define RANGE 120
-
-//Servo definitions
-#define SERVO_OPEN 0
-#define SERVO_CLOSE 1
-
-//Initializing states
-int DetectionState = DETECTION_NO;
-int ActionServo = SERVO_CLOSE;
+//Initialize LCD screen
+static LiquidCrystal lcd(2, 3, 4, 5, 6, 7);
+//Initialize sonar range finder
 static NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
 
+
+//Get voltage of input pin
+float get_pin_voltage(int pin) {
+  return analogRead(pin) * VOLTAGE_CONVERSION;
+}
+
 //Function to detect if there's someone by the flower
-bool isDetected() {
-  int sonar_distance = sonar.ping_cm();
-  if (sonar_distance != 0) {
-    return (sonar_distance < RANGE);
+bool is_detected() {
+  //Get distance from sonar range finder
+  sonarDistance = sonar.ping_cm();
+  //If there is a valid distance from the sensor
+  if (sonarDistance != 0) {
+    //True if distance is within the range of the sensor
+    return (sonarDistance < RANGE);
   }
   else {
     return false;
   }
 }
 
-//Convert the angle to number of ticks
-uint16_t angleToTicks(int angle) {
-  if (angle < 0) {
-    angle = 0;
-  }
-  if (angle > 180) {
-    angle = 180;
-  }
-
-  // Map 0..180 degrees to 1000..2000 us
-  uint16_t pulse_us = 1000 + ((uint32_t)angle * 1000) / 180;
-
-  // Each tick is 0.5 us, so multiply by 2
-  return pulse_us * 2;
+// Convert angle (0–180) to pulse length
+int angle_to_pulse(int angle) {
+  return map(angle, 0, MAX_ANGLE, SERVO_MIN, SERVO_MAX);
 }
 
-//Write servo angle
-void servoWriteAngle(int angle) {
-  OCR1A = angleToTicks(angle);
+//Set the servos to the correct angle
+void servo_set_angle() {
+    //Go through each servo and set their angles
+    for (int i = 0; i <= FINAL_SERVO; i += SERVO_SPACING) {
+        pwm.setPWM(i, 0, angle_to_pulse(servoAngle));
+    }
 }
 
-//Set up servo
-void servoInit() {
-  //Set PB1/OC1A (Pin 9) as output
-  DDRB |= (1 << DDB1);
-
-  //Clear control registers
-  TCCR1A = 0;
-  TCCR1B = 0;
-
-  //Fast PWM mode 14; TOP = ICR1
-  TCCR1A |= (1 << WGM11);
-  TCCR1B |= (1 << WGM12) | (1 << WGM13);
-
-  // Non-inverting output on OC1A
-  TCCR1A |= (1 << COM1A1);
-
-  // Prescaler = 8
-  TCCR1B |= (1 << CS11);
-
-  // 20 ms period at 16 MHz with prescaler 8
-  // Timer tick = 0.5 us
-  // 20,000 us / 0.5 us = 40,000 ticks
-  ICR1 = 39999;
-
-  //Set initial angle
-  OCR1A = angleToTicks(SERVO_START_ANGLE);
+//Detect whether the switch is off
+bool is_off() {
+  return (get_pin_voltage(TRANS_INPUT) > 1);
 }
 
-void FlowerPerception() {
-  if (isDetected()) {
-    DetectionState = DETECTION_YES;
-  }
-  else {
-    DetectionState = DETECTION_NO;
-  }
+//Initialize the messages
+void messages_init() {
+  //Initialize each message
+  messages[0] = "Hi beautiful!";
+  messages[1] = "You're perfect";
+  messages[2] = "Baddie!";
+  //Set the index of the current message
+  currentMessage = 0;
 }
 
-
-void FlowerPlanning() {
-  if (DetectionState == DETECTION_YES) {
-    ActionServo = SERVO_OPEN;
-  }
-  else {
-    ActionServo = SERVO_CLOSE;
-  }
+//Initialize servos
+void servo_init() {
+  //Start communication with servo driver
+  Wire.begin();
+  //Initialize pwm communication with servos
+  pwm = Adafruit_PWMServoDriver();
+  pwm.begin();
+  pwm.setPWMFreq(PWM_FREQ);
+  //Start the servos at the minimum angle
+  servoAngle = SERVO_MIN_ANGLE;
+  servo_set_angle();
 }
 
-
-void FlowerAction() {
-  static int ServoAngle = SERVO_START_ANGLE;
-  //If flower needs to open and it's not fully open, open more
-  if (ActionServo == SERVO_OPEN && ServoAngle < SERVO_UP_LIMIT) {
-    ServoAngle += 2;
-    Serial.println("Open");
-  }
-  //If flower needs to close and it's not fully closed, close more
-  else if (ActionServo == SERVO_CLOSE && ServoAngle > SERVO_DOWN_LIMIT) {
-    ServoAngle -= 2;
-    Serial.println("Close");
-  }
-  servoWriteAngle(ServoAngle);
+//Initialize lcd screen
+void lcd_init() {
+  lcd.begin(LCD_COLS, LCD_ROWS);
+  //Set the cursor to bottom row
+  lcd.setCursor(0 , 1);
+  //Write the first message
+  lcd.print(messages[currentMessage]);
 }
 
-
+//Setup systems
 void setup() {
-  //Output pins
-  //DDRC |= (1 << DDC1); 
+  //Initialize pins
+  pinMode(TRANS_OUTPUT, OUTPUT);
+  pinMode(TRANS_INPUT, INPUT_PULLUP);
   pinMode(TRIGGER_PIN, OUTPUT);
-  //Input pins
-  //DDRC &= ~(1 << DDC0); 
   pinMode(ECHO_PIN, INPUT);
-
-  //Servo
-  //myServo.attach(SERVO_PIN);
-  //my.Servo.write(SERVO_START_ANGLE);
-  servoInit();
-
-
+  //Keep power on
+  digitalWrite(TRANS_OUTPUT, HIGH);
+  //Initialize messages
+  messages_init();
+  //Initialize servos
+  servo_init();
+  //Display
+  lcd_init();
+  //Initialize state of servos
+  currentServoState = SERVO_CLOSE;
   //Serial
-  Serial.begin(9600);
+  Serial.begin(BAUD_RATE);
+  //Slight delay before loop
+  delay(SETUP_DELAY);
 }
 
+//Loop function
 void loop() {
-  //Perception of surroundings
-  FlowerPerception();
-  //Planning action
-  FlowerPlanning();
-  //Action
-  FlowerAction();
 
-  delay(30);
+  //Transition
+  switch (currentServoState) {
+        
+    //Opening the servos
+    case SERVO_CLOSE:
+      //If sensor detects something, open servos
+      if (is_detected()) {
+        currentServoState = SERVO_OPEN;
+        //If the servos close enough, change the messsage
+        if (servoAngle <= SERVO_THRESHOLD) {
+          //If it's the last message, change to the first one
+          if (currentMessage == MESSAGES_LEN - 1) {
+          currentMessage = 0;
+          }
+          //Change to the next message
+          else {
+            currentMessage += 1;
+          }
+          //Print the new message
+          lcd.print(messages[currentMessage]);
+        }
+      }
+      //If switch turns off, power off protocol
+      if (is_off()) {
+        currentServoState = SERVO_OFF;
+      }
+      break;
+
+    //Closing the servos
+    case SERVO_OPEN:
+      //If sensor doesn't detect something, close servos
+      if (!is_detected()) {
+        currentServoState = SERVO_CLOSE;
+      }
+      //If switch turns off, power off protocol
+      if (is_off()) {
+        currentServoState = SERVO_OFF;
+      }
+      break;
+
+    //Powering off
+    case SERVO_OFF:
+      break;
+
+    }
+
+  //Action
+  switch (currentServoState) {
+
+    //Opening the servos
+    case SERVO_CLOSE:
+      //If flower needs to close and it's not fully closed, close more
+      if (servoAngle > SERVO_MIN_ANGLE) {
+        servoAngle -= SERVO_INCREMENT;
+      }
+      //Set the servos
+      servo_set_angle();
+      break;
+
+    //Closing the servos
+    case SERVO_OPEN:
+      //If flower needs to open and it's not fully open, open more
+      if (servoAngle < SERVO_MAX_ANGLE) {
+        servoAngle += SERVO_INCREMENT;
+      }
+      //Set the servos
+      servo_set_angle();
+      break;
+
+    //Powering off
+    case SERVO_OFF:
+      //If flower not fully closed, close more
+      if (servoAngle > SERVO_MIN_ANGLE) {
+        servoAngle -= POWER_OFF_INCREMENT;
+      }
+      //Once servos fully closed, power off
+      else {
+        //Final wait delay
+        delay(POWER_OFF_DELAY);
+        //Power off
+        digitalWrite(TRANS_OUTPUT, LOW);
+      }
+      //Set the servos
+      servo_set_angle();
+      break;
+            
+    }
+  
+  //Delay between loops
+  delay(LOOP_DELAY);
 }
+
 
 
