@@ -18,6 +18,7 @@ An automated ATmega328P-based robotic flower which opens/closes its petals and d
 ## Repository Structure
 
 ```text
+.
 ├── .vscode/
 │   └── extensions.json  # Recommended VS Code extensions (PlatformIO, C/C++)
 ├── include/
