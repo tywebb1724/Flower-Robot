@@ -27,13 +27,13 @@
 #define RANGE 120
 //Parameters variables for servos
 #define PWM_FREQ 60
-#define SERVO_MIN  150 // 0 degrees
+#define SERVO_MIN  175 // 0 degrees
 #define SERVO_MAX  600 // 180 degrees
 #define MAX_ANGLE 180
 #define SERVO_MIN_ANGLE 0
 #define SERVO_MAX_ANGLE 180
 #define SERVO_THRESHOLD 90
-#define SERVO_INCREMENT 4
+#define SERVO_INCREMENT 10
 #define POWER_OFF_INCREMENT (2 * SERVO_INCREMENT)
 #define SERVO_SPACING 4
 #define FINAL_SERVO 12
@@ -43,11 +43,11 @@
 //Number of LCD messages
 #define MESSAGES_LEN 3
 
-
+//State of the servos
 typedef enum {
     SERVO_CLOSE,
     SERVO_OPEN,
     SERVO_OFF
-} servoState;
+} ServoState;
 
 #endif
