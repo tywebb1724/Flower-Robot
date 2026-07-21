@@ -54,8 +54,15 @@ void servo_set_angle() {
 
 void messages_init() {
   messages[0] = "Hi beautiful!";
-  messages[1] = "You're perfect";
+  messages[1] = "You're perfect!";
   messages[2] = "Baddie!";
+  messages[3] = "I love you!";
+  messages[4] = "Slay!";
+  messages[5] = "You're amazing!";
+  messages[6] = "Hey baby!";
+  messages[7] = "XOXO";
+  messages[8] = "My love";
+  messages[9] = "My perfect wife";
   currentMessage = 0;
 }
 
@@ -72,7 +79,7 @@ void servo_init() {
 
 void lcd_init() {
   lcd.begin(LCD_COLS, LCD_ROWS);
-  lcd.setCursor(0, 1);
+  lcd.setCursor(0, 0);
   lcd.print(messages[currentMessage]);
 }
 
@@ -114,7 +121,7 @@ void loop() {
           currentMessage = (currentMessage + 1) % MESSAGES_LEN;
           //Print the new message
           lcd.clear();
-          lcd.setCursor(0, 1);
+          lcd.setCursor(0, 0);
           lcd.print(messages[currentMessage]);
         }
       }

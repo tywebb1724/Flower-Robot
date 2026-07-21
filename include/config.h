@@ -41,7 +41,7 @@
 #define LCD_COLS 16
 #define LCD_ROWS 2
 //Number of LCD messages
-#define MESSAGES_LEN 3
+#define MESSAGES_LEN 10
 
 //State of the servos
 typedef enum {
